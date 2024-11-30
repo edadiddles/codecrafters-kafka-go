@@ -20,7 +20,8 @@ func main() {
 		fmt.Println("Error accepting connection: ", err.Error())
 	    os.Exit(1)
 	}
-    
+    buff := make([]byte, 1024)
+    conn.Read(buff)
     message := []byte{0, 0, 0, 0, 0, 0, 0, 7}
     conn.Write(message)
 }
