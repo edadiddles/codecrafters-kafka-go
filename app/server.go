@@ -22,7 +22,10 @@ func main() {
 	}
     buff := make([]byte, 1024)
     conn.Read(buff)
-    message := []byte{0, 0, 0, 0, 0, 0, 0, 7}
-    conn.Write(message)
+    // msg = 4, req_api_key = 2, req_api_vers = 2, correlation_id = 4
+    correlation_id := buff[8:12]
+    message_size := []byte{0, 0, 0, 0}
+    conn.Write(message_size)
+    conn.Write(correlation_id)
 }
 
