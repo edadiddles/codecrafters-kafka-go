@@ -21,9 +21,7 @@ func main() {
 	    os.Exit(1)
 	}
     
-    message_size := []byte{0, 0, 0, 0}
-    correlation_id := []byte{0, 0, 0, 7}
-    conn.Write(message_size)
-    conn.Write(correlation_id)
+    message := []byte{0, 0, 0, 0, 0, 0, 0, 7}
+    conn.Write(message)
 }
 
