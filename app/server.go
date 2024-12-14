@@ -24,9 +24,9 @@ func main() {
     buff := make([]byte, 1024)
     conn.Read(buff)
     // msg = 4, req_api_key = 2, req_api_vers = 2, correlation_id = 4
+    request_api_key := buff[4:6]
     request_api_version := buff[6:8]
     correlation_id := buff[8:12]
-    message_size := []byte{0, 0, 0, 0}
     supported_api_versions := [][]byte{
         {0, 0}, // version 0
         {0, 1}, // version 1
@@ -40,15 +40,22 @@ func main() {
             is_api_version_supported = true
         }
     }
-    
+
     // capture error
     error_code := []byte{0,0}
     if !is_api_version_supported {
         error_code = []byte{0, 35}
     }
 
+    api_keys := []byte{0, 0, 0, 0, 0, 0}
+    if bytes.Equal(request_api_key, []byte{1, 2}) {
+        api_keys = []byte{ 1,2, 0,0, 0,4 }
+    }
+
+    message_size := []byte{0, 0, 0, 3}
     conn.Write(message_size)
     conn.Write(correlation_id)
     conn.Write(error_code)
+    conn.Write(api_keys)
 }
 
