@@ -52,7 +52,7 @@ func main() {
         api_keys = []byte{ 1,2, 0,0, 0,4 }
     }
 
-    message_size := []byte{0, 0, 0, 3}
+    message_size := []byte{0, 0, 0, 4}
     conn.Write(message_size)
     conn.Write(correlation_id)
     conn.Write(error_code)
