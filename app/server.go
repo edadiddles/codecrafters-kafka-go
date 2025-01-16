@@ -74,11 +74,11 @@ func handleConnection(conn net.Conn) {
         
         resp := make([]byte, 0)
 
-        message_size := []byte{0, 0, 0, 33}
+        message_size := []byte{0, 0, 0, 40}
         resp = append(resp, message_size...)
         resp = append(resp, correlation_id...) // 4 bytes
         resp = append(resp, error_code...) // 2 bytes
-        resp = append(resp, []byte{4}...) // 1 byte (num tagged fields)
+        resp = append(resp, []byte{5}...) // 1 byte (num tagged fields)
         resp = append(resp, []byte{0, 1}...) // 2 bytes
         resp = append(resp, min_version...) // 2 bytes
         resp = append(resp, max_version...) // 2 bytes
@@ -91,6 +91,10 @@ func handleConnection(conn net.Conn) {
         resp = append(resp, min_version...) // 2 bytes
         resp = append(resp, max_version...) // 2 bytes
         resp = append(resp, []byte{0}...) // 1 byte (tag buffer)
+        resp = append(resp, []byte{0, 75}...) // 2 bytes
+        resp = append(resp, min_version...) // 2 bytes
+        resp = append(resp, min_version...) // 2 bytes
+        resp = append(resp, []byte{0}...) // 1 byte (tag buffer)    
         resp = append(resp, []byte{2,2,3,4}...) // 4 bytes (throttle_time_ms)
         resp = append(resp, []byte{0}...) // 1 byte (tag buffer)
 
