@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"net"
 	"os"
-    "bytes"
     "time"
+
+    "github.com/codecrafters-io/kafka-starter-go/app/request"
+    "github.com/codecrafters-io/kafka-starter-go/app/response"
+    "github.com/codecrafters-io/kafka-starter-go/app/utils"
 )
 
 func main() {
@@ -45,60 +48,98 @@ func handleConnection(conn net.Conn) {
         conn.Read(buff)
 
 
-        // msg = 4, req_api_key = 2, req_api_vers = 2, correlation_id = 4
-        //request_api_key := buff[4:6]
-        request_api_version := buff[6:8]
-        correlation_id := buff[8:12]
-        supported_api_versions := [][]byte{
-            {0, 0}, // version 0
-            {0, 1}, // version 1
-            {0, 2}, // version 2
-            {0, 3}, // version 3
-            {0, 4}, // version 4
+        // msg = 4
+        // header req_api_key = 2, req_api_vers = 2, correlation_id = 4 
+        //message_size := utils.bytes_to_int(buff[:4])
+        req_header := request.RequestHeaderV2{}
+        buff = req_header.Deserialize(buff[4:])
+ 
+        supported_api_versions := []int{}
+
+        if api_keys[req_header.ApiKey] == ApiVersions {
+            supported_api_versions = []int{ 0,1,2,3,4 }
+        } else if api_keys[req_header.ApiKey] == DescribeTopicPartitions {
+            supported_api_versions = []int{ 0 }
         }
+        
         is_api_version_supported := false
         for i := 0; i < len(supported_api_versions); i++ {
-            if bytes.Equal(request_api_version, supported_api_versions[i]) {
+            if req_header.ApiVersion == supported_api_versions[i] {
                 is_api_version_supported = true
             }
         }
 
         // capture error
-        error_code := []byte{0,0}
+        error_code := [2]byte{0,0}
         if !is_api_version_supported {
-            error_code = []byte{0, 35}
+            error_code = [2]byte{0, 35}
         }
-
-        min_version := []byte{0, 0}
-        max_version := []byte{0, 4}
         
-        resp := make([]byte, 0)
+        resp := response.Response{}
+        if api_keys[req_header.ApiKey] == ApiVersions {
+            header := response.ResponseHeaderV0{}
+            header.CorrelationId = req_header.CorrelationId
 
-        message_size := []byte{0, 0, 0, 40}
-        resp = append(resp, message_size...)
-        resp = append(resp, correlation_id...) // 4 bytes
-        resp = append(resp, error_code...) // 2 bytes
-        resp = append(resp, []byte{5}...) // 1 byte (num tagged fields)
-        resp = append(resp, []byte{0, 1}...) // 2 bytes
-        resp = append(resp, min_version...) // 2 bytes
-        resp = append(resp, max_version...) // 2 bytes
-        resp = append(resp, []byte{0}...) // 1 byte (tag buffer)
-        resp = append(resp, []byte{0, 2}...) // 2 bytes
-        resp = append(resp, min_version...) // 2 bytes
-        resp = append(resp, max_version...) // 2 bytes
-        resp = append(resp, []byte{0}...) // 1 byte (tag buffer)
-        resp = append(resp, []byte{0, 18}...) // 2 bytes
-        resp = append(resp, min_version...) // 2 bytes
-        resp = append(resp, max_version...) // 2 bytes
-        resp = append(resp, []byte{0}...) // 1 byte (tag buffer)
-        resp = append(resp, []byte{0, 75}...) // 2 bytes
-        resp = append(resp, min_version...) // 2 bytes
-        resp = append(resp, min_version...) // 2 bytes
-        resp = append(resp, []byte{0}...) // 1 byte (tag buffer)    
-        resp = append(resp, []byte{2,2,3,4}...) // 4 bytes (throttle_time_ms)
-        resp = append(resp, []byte{0}...) // 1 byte (tag buffer)
+            //req_body := request.ApiVersionsRequestV4{}
 
-        _, err := conn.Write(resp)
+            body := response.ApiVersionResponseV4{}
+            body.ErrorCode = error_code
+            body.ThrottleTimeMs = [4]byte{2,2,3,4}
+
+            api_versions := make([]response.ApiVersion, 0) 
+            api_versions = append(api_versions, response.ApiVersion{
+                ApiKey: [2]byte{0,1},
+                MinVersion: [2]byte{0,0},
+                MaxVersion: [2]byte{0,11},
+            })
+            api_versions = append(api_versions, response.ApiVersion{
+                ApiKey: [2]byte{0,18},
+                MinVersion: [2]byte{0,0},
+                MaxVersion: [2]byte{0,4},
+            })
+            api_versions = append(api_versions, response.ApiVersion{
+                ApiKey: [2]byte{0,75},
+                MinVersion: [2]byte{0,0},
+                MaxVersion: [2]byte{0,0},
+            })
+            body.ApiVersionsArr = response.ApiVersionsArray{
+                MessageSize: [1]byte{byte(len(api_versions)+1)},
+                ApiVersions: api_versions,
+            }
+
+            resp.Header = header
+            resp.Body = body
+        } else if api_keys[req_header.ApiKey] == DescribeTopicPartitions { 
+            header := response.ResponseHeaderV1{}
+            body := response.DescribeTopicPartitionsResponseV0{}
+
+            header.CorrelationId = req_header.CorrelationId
+
+            req_body := request.DescribeTopicPartitionsRequestV0{} 
+            buff = req_body.Deserialize(buff)
+            body.ThrottleTimeMs = [4]byte{ 0,0,0,0 }
+            req_num_topic := req_body.TopicsArr.Length
+            body.TopicsArr.MessageSize = [1]byte(utils.Int_to_bytes(req_num_topic, 1))
+            for i:=0; i < req_num_topic-1; i++ {
+                req_topic := req_body.TopicsArr.Topics[i]
+                topic := response.Topic{}
+                topic.Name.Contents = req_topic.Name
+                topic.Name.Length = [1]byte(utils.Int_to_bytes(req_topic.Length, 1))
+                // need to check for topic existence
+                error_code = [2]byte(utils.Int_to_bytes(3, 2))
+                topic.ErrorCode = error_code
+
+
+                body.TopicsArr.Topics = append(body.TopicsArr.Topics, topic)
+            }
+
+            
+            body.NextCursor.TopicName.Length = [1]byte{255}
+            resp.Header = header
+            resp.Body = body
+        }
+ 
+        _, err := conn.Write(resp.Serialize())
         if err != nil {
             run = false
         }
